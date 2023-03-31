@@ -110,7 +110,8 @@ const localClearTimeout =
 const localSetImmediate =
   typeof setImmediate !== 'undefined' ? setImmediate : null; // IE and Node.js + jsdom
 
-const isInputPending =
+// 根据浏览器navigator.scheduling实验性API来指示时间循环中是否有挂起的输入事件,这可以帮助开发人员在执行密集型计算任务时暂停计算以处理用户输入，从而提高应用程序的响应速度
+  const isInputPending =
   typeof navigator !== 'undefined' &&
   // $FlowFixMe[prop-missing]
   navigator.scheduling !== undefined &&
@@ -150,6 +151,7 @@ function handleTimeout(currentTime: number) {
   isHostTimeoutScheduled = false;
   advanceTimers(currentTime);
 
+  // 没有任务正在执行,则进行任务调度有限处理taskQueue,再处理timerQueue
   if (!isHostCallbackScheduled) {
     if (peek(taskQueue) !== null) {
       isHostCallbackScheduled = true;
@@ -329,6 +331,7 @@ function unstable_next<T>(eventHandler: () => T): T {
   }
 }
 
+//
 function unstable_wrapCallback<T: (...Array<mixed>) => mixed>(callback: T): T {
   var parentPriorityLevel = currentPriorityLevel;
   // $FlowFixMe[incompatible-return]
@@ -437,10 +440,12 @@ function unstable_scheduleCallback(
   return newTask;
 }
 
+// 暂停执行任务
 function unstable_pauseExecution() {
   isSchedulerPaused = true;
 }
 
+// 继续任务调度
 function unstable_continueExecution() {
   isSchedulerPaused = false;
   if (!isHostCallbackScheduled && !isPerformingWork) {
@@ -453,6 +458,7 @@ function unstable_getFirstCallbackNode(): Task | null {
   return peek(taskQueue);
 }
 
+// 取消任务调度
 function unstable_cancelCallback(task: Task) {
   if (enableProfiling) {
     if (task.isQueued) {
@@ -468,6 +474,7 @@ function unstable_cancelCallback(task: Task) {
   task.callback = null;
 }
 
+// 获取当前任务优先级
 function unstable_getCurrentPriorityLevel(): PriorityLevel {
   return currentPriorityLevel;
 }
@@ -492,6 +499,7 @@ let startTime = -1;
 
 let needsPaint = false;
 
+// 查看剩余时间是否小于当前帧的时间默认是
 function shouldYieldToHost(): boolean {
   const timeElapsed = getCurrentTime() - startTime;
   if (timeElapsed < frameInterval) {
@@ -508,6 +516,7 @@ function shouldYieldToHost(): boolean {
   // eventually yield regardless, since there could be a pending paint that
   // wasn't accompanied by a call to `requestPaint`, or other main thread tasks
   // like network events.
+  // 存在优先级高的任务(用户的交互行为),则会暂停任务的调度执行
   if (enableIsInputPending) {
     if (needsPaint) {
       // There's a pending paint (signaled by `requestPaint`). Yield now.
@@ -537,6 +546,7 @@ function shouldYieldToHost(): boolean {
   return true;
 }
 
+// 浏览器是否需要绘制,
 function requestPaint() {
   if (
     enableIsInputPending &&
@@ -552,6 +562,7 @@ function requestPaint() {
   // Since we yield every frame regardless, `requestPaint` has no effect.
 }
 
+// 根据设备设置一帧的渲染时间
 function forceFrameRate(fps: number) {
   if (fps < 0 || fps > 125) {
     // Using console['error'] to evade Babel and ESLint
@@ -569,6 +580,7 @@ function forceFrameRate(fps: number) {
   }
 }
 
+// 执行任务到指定的截止时间,schedulePerformWorkUntilDeadline会递归调用performWorkUntilDeadline
 const performWorkUntilDeadline = () => {
   if (scheduledHostCallback !== null) {
     const currentTime = getCurrentTime();
@@ -605,6 +617,8 @@ const performWorkUntilDeadline = () => {
   needsPaint = false;
 };
 
+
+// 截止时间前调度任务,使用底层函数优先级setInmmediate>MessageChannel>setTimeout
 let schedulePerformWorkUntilDeadline;
 if (typeof localSetImmediate === 'function') {
   // Node.js and old IE.
@@ -638,6 +652,7 @@ if (typeof localSetImmediate === 'function') {
   };
 }
 
+// 异步调度回调任务,尽量当前事件循环执行
 function requestHostCallback(
   callback: (hasTimeRemaining: boolean, initialTime: number) => boolean,
 ) {
@@ -659,6 +674,7 @@ function requestHostTimeout(
   }, ms);
 }
 
+// 取消延迟任务的调度执行
 function cancelHostTimeout() {
   // $FlowFixMe[not-a-function] nullable value
   localClearTimeout(taskTimeoutID);
