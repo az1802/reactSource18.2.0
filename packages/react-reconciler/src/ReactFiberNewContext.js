@@ -17,6 +17,11 @@ import type {StackCursor} from './ReactFiberStack';
 import type {Lanes} from './ReactFiberLane';
 import type {SharedQueue} from './ReactFiberClassUpdateQueue';
 
+/**
+ * 在React16中，为了支持异步渲染，React引入了多个渲染器的概念，此时每个渲染器都需要有一个标识自己的值，
+ * 因此就有了isPrimaryRenderer这个变量。当一个组件被多个渲染器使用时，只有其中一个渲染器的isPrimaryRenderer的值为true，
+ * 其他渲染器的值都为false。这个变量一般在React内部的一些方法中使用
+ */
 import {isPrimaryRenderer} from './ReactFiberHostConfig';
 import {createCursor, push, pop} from './ReactFiberStack';
 import {
@@ -178,6 +183,9 @@ export function popProvider(
   pop(valueCursor, providerFiber);
 }
 
+/**
+ * 在组件树上向上遍历，为每个父组件调度一次重新渲染的任务，以更新它们的上下文。
+ */
 export function scheduleContextWorkOnParentPath(
   parent: Fiber | null,
   renderLanes: Lanes,
@@ -220,6 +228,13 @@ export function scheduleContextWorkOnParentPath(
   }
 }
 
+/**
+ * 传递context value值的变化
+ * 当 context 的值发生变化时，React 会将新的值设置给 _currentValue。
+ * 然后，React 遍历整个组件树，查找哪些组件依赖该 context。
+ * 在遍历的过程中，React 针对每个依赖该 context 的组件都会调用 propagateContextChange 方法，这个方法会将新的 context 值设置给组件的 _currentValue2 属性。
+ * 在下一次更新时，React 会比较 _currentValue 和 _currentValue2，如果它们不相等，就意味着 context 的值发生了变化，需要重新渲染该组件及其子组件
+ */
 export function propagateContextChange<T>(
   workInProgress: Fiber,
   context: ReactContext<T>,
@@ -241,6 +256,7 @@ export function propagateContextChange<T>(
   }
 }
 
+//
 function propagateContextChange_eager<T>(
   workInProgress: Fiber,
   context: ReactContext<T>,
@@ -266,7 +282,7 @@ function propagateContextChange_eager<T>(
       /**使用过 contextType useContext 的组件对应 fiber,和 Consumer 类型 fiber，会和 dependencies 建立起联系，会把当前消费的 context 放入 dependencies 中 */
       let dependency = list.firstContext;//一个fiber节点可能有多个context与之对应
       while (dependency !== null) {
-        // Check if the context matches.
+        // Check if the context matches. 找到匹配的context
         if (dependency.context === context) {
           // Match! Schedule an update on this fiber.
           /* 类组件：不受 PureComponent 和 shouldComponentUpdate 影响 ,会直接添加forceUpdate 标记*/
@@ -653,6 +669,7 @@ export function checkIfContextChanged(
   return false;
 }
 
+//
 export function prepareToReadContext(
   workInProgress: Fiber,
   renderLanes: Lanes,
@@ -682,8 +699,10 @@ export function prepareToReadContext(
 
 /**
  *
- * readContext 主要做的事情是这样的，首先会创建一个 contextItem ，上述说到过 fiber 上会存在多个 dependencies ，它们以链表的形式联系到一起，如果不存在最后一个 context dependency ，
- * 那证明 context dependencies 为空 ，那么会创建第一个 dependency ，如果存在最后一个 dependency ，那么 contextItem 会以链表形式保存，并变成最后一个 lastContextDependency 。
+ * readContext 主要做的事情是这样的，首先会创建一个 contextItem ，上述说到过 fiber 上会存在多个 dependencies ，
+ * 它们以链表的形式联系到一起，如果不存在最后一个 context dependency ，
+ * 那证明 context dependencies 为空 ，那么会创建第一个 dependency ，
+ * 如果存在最后一个 dependency ，那么 contextItem 会以链表形式保存，并变成最后一个 lastContextDependency 。
  */
 export function readContext<T>(context: ReactContext<T>): T {
   if (__DEV__) {
@@ -699,6 +718,7 @@ export function readContext<T>(context: ReactContext<T>): T {
     }
   }
 
+  //isPrimaryRenderer表示当前组件是否是住渲染器
   const value = isPrimaryRenderer
     ? context._currentValue
     : context._currentValue2;
@@ -712,6 +732,7 @@ export function readContext<T>(context: ReactContext<T>): T {
       next: null,
     };
 
+    // fiber上会存在多个dependencies,他们以链表的形式联系在一起,不存在最后一个context dependency,就会创建第一个dependency,否则就放置链表最后进行保存
     if (lastContextDependency === null) {
       if (currentlyRenderingFiber === null) {
         throw new Error(

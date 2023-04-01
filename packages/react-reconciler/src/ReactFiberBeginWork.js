@@ -3435,7 +3435,7 @@ function updatePortalComponent(
 }
 
 let hasWarnedAboutUsingNoValuePropOnContextProvider = false;
-
+// 针对,Context.Provider做更新处理
 function updateContextProvider(
   current: Fiber | null,
   workInProgress: Fiber,
@@ -3476,6 +3476,7 @@ function updateContextProvider(
   } else {
     if (oldProps !== null) {
       const oldValue = oldProps.value;
+      // 判断context是否发生变化
       if (is(oldValue, newValue)) {
         // No change. Bailout early if children are the same.
         if (
@@ -3498,7 +3499,7 @@ function updateContextProvider(
     }
   }
 
-  // 调和更新子节点
+  // context发生变化,调和更新子节点
   const newChildren = newProps.children;
   reconcileChildren(current, workInProgress, newChildren, renderLanes);
   return workInProgress.child;
@@ -3506,6 +3507,7 @@ function updateContextProvider(
 
 let hasWarnedAboutUsingContextAsConsumer = false;
 
+// 针对Context.Consumer的更新处理
 function updateContextConsumer(
   current: Fiber | null,
   workInProgress: Fiber,
@@ -3538,7 +3540,7 @@ function updateContextConsumer(
     }
   }
   const newProps = workInProgress.pendingProps;
-  const render = newProps.children;
+  const render = newProps.children;//Consumer的子节点即为一个render函数
 
   if (__DEV__) {
     if (typeof render !== 'function') {
@@ -3551,8 +3553,10 @@ function updateContextConsumer(
     }
   }
 
+  //获取新的value值
   prepareToReadContext(workInProgress, renderLanes);
   const newValue = readContext(context);
+
   if (enableSchedulingProfiler) {
     markComponentRenderStarted(workInProgress);
   }
@@ -3563,7 +3567,7 @@ function updateContextConsumer(
     newChildren = render(newValue);
     setIsRendering(false);
   } else {
-    newChildren = render(newValue);
+    newChildren = render(newValue);//根据新的value值重新运行render函数,生成新的chilren
   }
   if (enableSchedulingProfiler) {
     markComponentRenderStopped();

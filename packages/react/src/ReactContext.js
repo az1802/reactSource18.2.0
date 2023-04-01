@@ -13,6 +13,12 @@ import type {ReactProviderType} from 'shared/ReactTypes';
 import type {ReactContext} from 'shared/ReactTypes';
 
 
+
+/**
+ * 创建context对象
+ * 通过_currentValue Provider向下传递context状态
+ * updateContextProvider 会针对Provider进行特殊处理
+ */
 export function createContext<T>(defaultValue: T): ReactContext<T> {
   // TODO: Second argument used to be an optional `calculateChangedBits`
   // function. Warn to reserve for future use?
@@ -38,6 +44,7 @@ export function createContext<T>(defaultValue: T): ReactContext<T> {
     _globalName: (null: any),
   };
 
+  // Provider组件
   context.Provider = {
     $$typeof: REACT_PROVIDER_TYPE,
     _context: context,
@@ -47,6 +54,7 @@ export function createContext<T>(defaultValue: T): ReactContext<T> {
   let hasWarnedAboutUsingConsumerProvider = false;
   let hasWarnedAboutDisplayNameOnConsumer = false;
 
+  // Consumer组件
   if (__DEV__) {
     // A separate object, but proxies back to the original context object for
     // backwards compatibility. It has a different $$typeof, so we can properly
@@ -57,7 +65,7 @@ export function createContext<T>(defaultValue: T): ReactContext<T> {
     };
     // $FlowFixMe: Flow complains about not setting a value, which is intentional here
     Object.defineProperties(Consumer, {
-      Provider: {
+      Provider: { //由于Consumer即Context对象,所以避免这种不规范形式的调用
         get() {
           if (!hasWarnedAboutUsingConsumerProvider) {
             hasWarnedAboutUsingConsumerProvider = true;
