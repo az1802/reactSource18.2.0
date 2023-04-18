@@ -816,7 +816,9 @@ export function resetHooksOnUnwind(): void {
   thenableState = null;
 }
 
-//当前正在处理的hook
+/**
+ * mount阶段,生成hook对象,next用于指向render函数运行时的下一个hook
+ */
 function mountWorkInProgressHook(): Hook {
   const hook: Hook = {
     memoizedState: null,
@@ -857,9 +859,9 @@ function updateWorkInProgressHook(): Hook {
   }
 
   let nextWorkInProgressHook: null | Hook;
-  if (workInProgressHook === null) {
+  if (workInProgressHook === null) { //useRef useState只获取相关的值
     nextWorkInProgressHook = currentlyRenderingFiber.memoizedState;
-  } else {
+  } else {//useEffect useLayoutEffect获取副作用函数
     nextWorkInProgressHook = workInProgressHook.next;
   }
 
@@ -1025,6 +1027,7 @@ function useMemoCache(size: number): Array<any> {
   return data;
 }
 
+//处理useState 数据更新的方法或者值
 function basicStateReducer<S>(state: S, action: BasicStateAction<S>): S {
   // $FlowFixMe: Flow doesn't like mixed types
   return typeof action === 'function' ? action(state) : action;
@@ -1036,6 +1039,7 @@ function mountReducer<S, I, A>(
   init?: I => S,
 ): [S, Dispatch<A>] {
   const hook = mountWorkInProgressHook();
+  // 处理初始化值
   let initialState;
   if (init !== undefined) {
     initialState = init(initialArg);
@@ -1043,6 +1047,7 @@ function mountReducer<S, I, A>(
     initialState = ((initialArg: any): S);
   }
   hook.memoizedState = hook.baseState = initialState;
+
   const queue: UpdateQueue<S, A> = {
     pending: null,
     lanes: NoLanes,
@@ -1059,6 +1064,7 @@ function mountReducer<S, I, A>(
   return [hook.memoizedState, dispatch];
 }
 
+//更新时执行的是hook是 HooksDispatcherOnUpdate,useState函数即是运行updateReducer
 function updateReducer<S, I, A>(
   reducer: (S, A) => S,
   initialArg: I,
@@ -1106,6 +1112,7 @@ function updateReducer<S, I, A>(
     queue.pending = null;
   }
 
+  //循环更新得到最新的state
   if (baseQueue !== null) {
     // We have a queue to process.
     const first = baseQueue.next;
@@ -1199,6 +1206,7 @@ function updateReducer<S, I, A>(
       markWorkInProgressReceivedUpdate();
     }
 
+    //赋值新的state数据
     hook.memoizedState = newState;
     hook.baseState = newBaseState;
     hook.baseQueue = newBaseQueueLast;
@@ -1213,7 +1221,7 @@ function updateReducer<S, I, A>(
   }
 
   const dispatch: Dispatch<A> = (queue.dispatch: any);
-  return [hook.memoizedState, dispatch];
+  return [hook.memoizedState, dispatch]; //返回新的数据么更新方法
 }
 
 function rerenderReducer<S, I, A>(
@@ -1813,15 +1821,22 @@ function forceStoreRerender(fiber: Fiber) {
   }
 }
 
+/**
+ * useState在render函数运行时绑定数据
+ *
+ */
 function mountState<S>(
   initialState: (() => S) | S,
 ): [S, Dispatch<BasicStateAction<S>>] {
+  // 根据当前fiber节点,产生hooks对象
   const hook = mountWorkInProgressHook();
   if (typeof initialState === 'function') { //初始值为函数的情况
     // $FlowFixMe: Flow doesn't like mixed types
     initialState = initialState();
   }
+  //绑定初始值
   hook.memoizedState = hook.baseState = initialState;
+  //更新队列
   const queue: UpdateQueue<S, BasicStateAction<S>> = {
     pending: null,
     lanes: NoLanes,
@@ -1830,11 +1845,13 @@ function mountState<S>(
     lastRenderedState: (initialState: any),
   };
   hook.queue = queue;
+  // dispatch用于更新数据,该方便已经绑定了当前render的fiber节点
   const dispatch: Dispatch<BasicStateAction<S>> = (queue.dispatch =
     (dispatchSetState.bind(null, currentlyRenderingFiber, queue): any));
   return [hook.memoizedState, dispatch];
 }
 
+// render函数重新运行时更新数据
 function updateState<S>(
   initialState: (() => S) | S,
 ): [S, Dispatch<BasicStateAction<S>>] {
@@ -1847,6 +1864,9 @@ function rerenderState<S>(
   return rerenderReducer(basicStateReducer, (initialState: any));
 }
 
+/**
+ * 创建effect对象并把它放到fiber.updateQueue上
+ */
 function pushEffect(
   tag: HookFlags,
   create: () => (() => void) | void,
@@ -1863,6 +1883,7 @@ function pushEffect(
   };
   let componentUpdateQueue: null | FunctionComponentUpdateQueue =
     (currentlyRenderingFiber.updateQueue: any);
+    //将effect添加到updateQueue 链表中
   if (componentUpdateQueue === null) {
     componentUpdateQueue = createFunctionComponentUpdateQueue();
     currentlyRenderingFiber.updateQueue = (componentUpdateQueue: any);
@@ -1898,6 +1919,7 @@ function getCallerStackFrame(): string {
     : stackFrames.slice(2, 3).join('\n');
 }
 
+//useRef mount阶段 产生ref对象.绑定到hook.memoizedState上
 function mountRef<T>(initialValue: T): {current: T} {
   const hook = mountWorkInProgressHook();
   if (enableUseRefAccessWarning) {
@@ -1967,6 +1989,7 @@ function mountRef<T>(initialValue: T): {current: T} {
   }
 }
 
+//useRef更新时,直接返回缓存的值
 function updateRef<T>(initialValue: T): {current: T} {
   const hook = updateWorkInProgressHook();
   return hook.memoizedState;
@@ -2021,6 +2044,7 @@ function updateEffectImpl(
   );
 }
 
+//useEffect  mount阶段
 function mountEffect(
   create: () => (() => void) | void,
   deps: Array<mixed> | void | null,
@@ -2263,6 +2287,7 @@ function updateCallback<T>(callback: T, deps: Array<mixed> | void | null): T {
   return callback;
 }
 
+// useMome mount阶段 使用memoizedState缓存值和deps
 function mountMemo<T>(
   nextCreate: () => T,
   deps: Array<mixed> | void | null,
@@ -2277,6 +2302,7 @@ function mountMemo<T>(
   return nextValue;
 }
 
+//useMemo 更新时,根据deps是否发生变化来决定,是否重新运行函数产生新的值
 function updateMemo<T>(
   nextCreate: () => T,
   deps: Array<mixed> | void | null,
@@ -2288,6 +2314,7 @@ function updateMemo<T>(
     // Assume these are defined. If they're not, areHookInputsEqual will warn.
     if (nextDeps !== null) {
       const prevDeps: Array<mixed> | null = prevState[1];
+      // 判断deps是都发生变化
       if (areHookInputsEqual(nextDeps, prevDeps)) {
         return prevState[0];
       }
@@ -2592,6 +2619,7 @@ function dispatchReducerAction<S, A>(
   if (isRenderPhaseUpdate(fiber)) {
     enqueueRenderPhaseUpdate(queue, update);
   } else {
+    // 向上查找到根节点
     const root = enqueueConcurrentHookUpdate(fiber, queue, update, lane);
     if (root !== null) {
       const eventTime = requestEventTime();
@@ -2605,8 +2633,8 @@ function dispatchReducerAction<S, A>(
 
 //useStae 返回的setSate函数
 function dispatchSetState<S, A>(
-  fiber: Fiber,
-  queue: UpdateQueue<S, A>,
+  fiber: Fiber,//mountState时会预先绑定好render函数运行时的fiber节点
+  queue: UpdateQueue<S, A>,//mountState时会预先绑定好hook对象关联的queue更新队列
   action: A,
 ): void {
   if (__DEV__) {
@@ -2619,8 +2647,10 @@ function dispatchSetState<S, A>(
     }
   }
 
+  //根据fiber节点产生任务等级
   const lane = requestUpdateLane(fiber);
 
+  // 创建更新任务
   const update: Update<S, A> = {
     lane,
     action,

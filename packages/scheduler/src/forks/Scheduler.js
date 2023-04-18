@@ -165,6 +165,7 @@ function handleTimeout(currentTime: number) {
   }
 }
 
+//同步执行所有挂起的更新,内部使用workLoop循环处理过期任务
 function flushWork(hasTimeRemaining: boolean, initialTime: number) {
   if (enableProfiling) {
     markSchedulerUnsuspended(initialTime);
@@ -208,16 +209,18 @@ function flushWork(hasTimeRemaining: boolean, initialTime: number) {
     }
   }
 }
-
+// 循环执行任务
 function workLoop(hasTimeRemaining: boolean, initialTime: number) {
   let currentTime = initialTime;
   advanceTimers(currentTime);
   currentTask = peek(taskQueue);
+
+  //循环执行taskQueue中的任务
   while (
     currentTask !== null &&
     !(enableSchedulerDebugging && isSchedulerPaused)
   ) {
-    //任务还未超时 且 当前时间片已用完需要将控制权交还浏览器,则跳出循环
+    //任务还未超时且当前时间片已用完 需要将控制权交还浏览器,则跳出循环
     if (
       currentTask.expirationTime > currentTime &&
       (!hasTimeRemaining || shouldYieldToHost())
@@ -233,13 +236,25 @@ function workLoop(hasTimeRemaining: boolean, initialTime: number) {
       // $FlowFixMe[incompatible-use] found when upgrading Flow
       currentPriorityLevel = currentTask.priorityLevel;
       // $FlowFixMe[incompatible-use] found when upgrading Flow
+      // 任务是否过期
       const didUserCallbackTimeout = currentTask.expirationTime <= currentTime;
       if (enableProfiling) {
         // $FlowFixMe[incompatible-call] found when upgrading Flow
         markTaskRun(currentTask, currentTime);
       }
+
       const continuationCallback = callback(didUserCallbackTimeout);
       currentTime = getCurrentTime();
+      // 检查callback的执行结果返回的是不是函数，如果返回的是函数，则将这个函数作为当前任务新的回调。
+      // concurrent模式下，callback是performConcurrentWorkOnRoot，其内部根据当前调度的任务
+      // 是否相同，来决定是否返回自身，如果相同，则说明还有任务没做完，返回自身，其作为新的callback
+      // 被放到当前的task上。while循环完成一次之后，检查shouldYieldToHost，如果需要让出执行权，
+      // 则中断循环，走到下方，判断currentTask不为null，返回true，说明还有任务，回到performWorkUntilDeadline
+      // 中，判断还有任务，继续port.postMessage(null)，调用监听函数performWorkUntilDeadline（执行者），
+      // 继续调用workLoop行任务
+
+      // 将返回值继续赋值给currentTask.callback，为得是下一次能够继续执行callback，
+      // 获取它的返回值，继续判断任务是否完成。
       if (typeof continuationCallback === 'function') {
         // If a continuation is returned, immediately yield to the main thread
         // regardless of how much time is left in the current time slice.
@@ -269,10 +284,11 @@ function workLoop(hasTimeRemaining: boolean, initialTime: number) {
     currentTask = peek(taskQueue);
   }
   // Return whether there's additional work
-  // 任务是否运行完成
+  // 如果currentTask不为空，说明是时间片的限制导致了任务中断
+  // return 一个 true告诉外部，此时任务还未执行完，还有任务，
   if (currentTask !== null) {
     return true;
-  } else {
+  } else {//将timeQueue队列中的任务移到taskQueue中执行
     const firstTimer = peek(timerQueue);
     if (firstTimer !== null) {
       requestHostTimeout(handleTimeout, firstTimer.startTime - currentTime);
@@ -471,6 +487,8 @@ function unstable_cancelCallback(task: Task) {
   // Null out the callback to indicate the task has been canceled. (Can't
   // remove from the queue because you can't remove arbitrary nodes from an
   // array based heap, only the first one.)
+  //在workLoop中，如果callback是null会被移出taskQueue，所以当前的这个任务就不会再被执行了。
+  //它取消的是当前任务的执行，while循环还会继续执行下一个任务。
   task.callback = null;
 }
 
@@ -582,6 +600,7 @@ function forceFrameRate(fps: number) {
 
 // 执行任务到指定的截止时间,schedulePerformWorkUntilDeadline会递归调用performWorkUntilDeadline
 const performWorkUntilDeadline = () => {
+  // scheduledHostCallback为待执行的任务
   if (scheduledHostCallback !== null) {
     const currentTime = getCurrentTime();
     // Keep track of the start time so we can measure how long the main thread
@@ -598,12 +617,13 @@ const performWorkUntilDeadline = () => {
     let hasMoreWork = true;
     try {
       // $FlowFixMe[not-a-function] found when upgrading Flow
+      //调度任务,如果还有任务未完成会返回true比如workLoop返回true时,最终结果会返回到这里
       hasMoreWork = scheduledHostCallback(hasTimeRemaining, currentTime);
     } finally {
       if (hasMoreWork) {
         // If there's more work, schedule the next message event at the end
         // of the preceding one.
-        schedulePerformWorkUntilDeadline();
+        schedulePerformWorkUntilDeadline();//下一个事件循环中继续调度任务
       } else {
         isMessageLoopRunning = false;
         scheduledHostCallback = null;

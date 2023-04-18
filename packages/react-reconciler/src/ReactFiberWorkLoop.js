@@ -617,6 +617,9 @@ export function getCurrentTime(): number {
   return now();
 }
 
+/**
+ * 根据mode,isTransition(使用useTransition),updateLane(正在更新),eventLane(事件优先级)来确定更新等级
+ */
 export function requestUpdateLane(fiber: Fiber): Lane {
   // Special cases
   const mode = fiber.mode;

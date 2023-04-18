@@ -9,28 +9,33 @@
 
 import {enableCreateEventHandleAPI} from 'shared/ReactFeatureFlags';
 
+
+/**
+ * 在 React 中，通过将这些常量进行位运算的方式来表示 Fiber 节点的状态。每个 Fiber 节点都有一个 flags 属性，表示该节点的状态。
+ * 例如，如果一个节点同时是新插入的、需要更新的，那么它的 flags 属性值就是 Placement | Update。
+ */
 export type Flags = number;
 
 // Don't change these values. They're used by React Dev Tools.
 export const NoFlags = /*                      */ 0b000000000000000000000000000;
 export const PerformedWork = /*                */ 0b000000000000000000000000001;
-export const Placement = /*                    */ 0b000000000000000000000000010;
+export const Placement = /*                    */ 0b000000000000000000000000010; //标识新插入的 Fiber 节点，即该节点是在其父节点中新增的。
 export const DidCapture = /*                   */ 0b000000000000000000010000000;
 export const Hydrating = /*                    */ 0b000000000000001000000000000;
 
 // You can change the rest (and add more).
-export const Update = /*                       */ 0b000000000000000000000000100;
+export const Update = /*                       */ 0b000000000000000000000000100;//标识 Fiber 节点需要更新，即其 props 或 state 发生了变化。
 /* Skipped value:                                 0b000000000000000000000001000; */
 
-export const ChildDeletion = /*                */ 0b000000000000000000000010000;
-export const ContentReset = /*                 */ 0b000000000000000000000100000;
-export const Callback = /*                     */ 0b000000000000000000001000000;
+export const ChildDeletion = /*                */ 0b000000000000000000000010000; //标识需要删除的子节点。
+export const ContentReset = /*                 */ 0b000000000000000000000100000; //标识需要重置内容。
+export const Callback = /*                     */ 0b000000000000000000001000000; //标识需要执行回调函数。
 /* Used by DidCapture:                            0b000000000000000000010000000; */
 
 export const ForceClientRender = /*            */ 0b000000000000000000100000000;
 export const Ref = /*                          */ 0b000000000000000001000000000;
 export const Snapshot = /*                     */ 0b000000000000000010000000000;
-export const Passive = /*                      */ 0b000000000000000100000000000;
+export const Passive = /*                      */ 0b000000000000000100000000000; //标识该 Fiber 节点是否是被动更新的，即不需要执行副作用。
 /* Used by Hydrating:                             0b000000000000001000000000000; */
 
 export const Visibility = /*                   */ 0b000000000000010000000000000;
@@ -88,7 +93,7 @@ export const MutationMask =
   Ref |
   Hydrating |
   Visibility;
-export const LayoutMask = Update | Callback | Ref | Visibility;
+export const LayoutMask = Update | Callback | Ref | Visibility;// 标识节点需要布局更新，即需要计算位置和尺寸等
 
 // TODO: Split into PassiveMountMask and PassiveUnmountMask
 export const PassiveMask = Passive | Visibility | ChildDeletion;
